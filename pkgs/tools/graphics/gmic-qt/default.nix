@@ -26,6 +26,8 @@
 , gnused
 , coreutils
 , jq
+, extra-cmake-modules
+, kcoreaddons
 }:
 
 let
@@ -38,9 +40,13 @@ let
       description = "GIMP plugin for the G'MIC image processing framework";
     };
 
-    krita = {
+    krita-plugin = {
       extraDeps = [
-        krita
+        (krita.override {
+          withGmic = false;
+        })
+        extra-cmake-modules # ECM
+        kcoreaddons
       ];
       description = "Krita plugin for the G'MIC image processing framework";
     };
@@ -54,18 +60,31 @@ in
 
 assert lib.assertMsg (builtins.hasAttr variant variants) "gmic-qt variant “${variant}” is not supported. Please use one of ${lib.concatStringsSep ", " (builtins.attrNames variants)}.";
 
-assert lib.assertMsg (builtins.all (d: d != null) variants.${variant}.extraDeps or []) "gmic-qt variant “${variant}” is missing one of its dependencies.";
+assert lib.assertMsg (builtins.all (d: d != null) variants.${variant}.extraDeps or [ ]) "gmic-qt variant “${variant}” is missing one of its dependencies.";
 
 mkDerivation rec {
   pname = "gmic-qt${lib.optionalString (variant != "standalone") "-${variant}"}";
   version = "3.1.6";
 
-  src = fetchFromGitHub {
-    owner = "c-koi";
-    repo = "gmic-qt";
-    rev = "v.${version}";
-    sha256 = "sha256-/5wDHvJSMgEheg8YV4W40wUiHz25emIoFnGdfO8i92g=";
-  };
+  src =
+    if variant == "krita-plugin" then
+      fetchFromGitHub
+        {
+          owner = "amyspark";
+          repo = "gmic";
+          rev = "amyspark/v${version}";
+          sha256 = "sha256-J6+FyUdJRVDR3qXAKhsHTOpJAzjxMA6moAHWVuxqIU4=";
+        }
+    else
+      fetchFromGitHub
+        {
+          owner = "c-koi";
+          repo = "gmic-qt";
+          rev = "v.${version}";
+          sha256 = "sha256-/5wDHvJSMgEheg8YV4W40wUiHz25emIoFnGdfO8i92g=";
+        };
+
+  sourceRoot = if variant == "krita-plugin" then "source/gmic-qt" else null;
 
   nativeBuildInputs = [
     cmake
@@ -87,7 +106,7 @@ mkDerivation rec {
     openexr
     graphicsmagick
     curl
-  ] ++ variants.${variant}.extraDeps or [];
+  ] ++ variants.${variant}.extraDeps or [ ];
 
   cmakeFlags = [
     "-DGMIC_QT_HOST=${if variant == "standalone" then "none" else variant}"
